@@ -1,0 +1,167 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-packages:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            bin_ext: ""
+            archive_ext: tar.gz
+          - goos: linux
+            goarch: arm64
+            bin_ext: ""
+            archive_ext: tar.gz
+          - goos: darwin
+            goarch: amd64
+            bin_ext: ""
+            archive_ext: tar.gz
+          - goos: darwin
+            goarch: arm64
+            bin_ext: ""
+            archive_ext: tar.gz
+          - goos: windows
+            goarch: amd64
+            bin_ext: .exe
+            archive_ext: zip
+          - goos: windows
+            goarch: arm64
+            bin_ext: .exe
+            archive_ext: zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            version="${GITHUB_REF#refs/tags/}"
+          else
+            version="dev-${GITHUB_SHA::7}"
+          fi
+          echo "value=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build and package
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          VERSION: ${{ steps.version.outputs.value }}
+          BIN_EXT: ${{ matrix.bin_ext }}
+          ARCHIVE_EXT: ${{ matrix.archive_ext }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          bin_name="acp-bridge${BIN_EXT}"
+          package_name="acp-bridge_${VERSION}_${GOOS}_${GOARCH}"
+
+          mkdir -p dist
+          GOOS="${GOOS}" GOARCH="${GOARCH}" go build -trimpath -ldflags='-s -w' -o "dist/${bin_name}" .
+
+          mkdir -p "dist/${package_name}"
+          cp "dist/${bin_name}" "dist/${package_name}/${bin_name}"
+          cp SKILL.md "dist/${package_name}/SKILL.md"
+
+          if [[ "${ARCHIVE_EXT}" == "zip" ]]; then
+            (
+              cd dist
+              zip -r "${package_name}.zip" "${package_name}"
+            )
+          else
+            tar -C dist -czf "dist/${package_name}.tar.gz" "${package_name}"
+          fi
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
+  checksums:
+    name: Generate checksums
+    runs-on: ubuntu-latest
+    needs: build-packages
+
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: package-*
+          merge-multiple: true
+
+      - name: Create SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          ls -1 *.tar.gz *.zip >/dev/null
+          sha256sum *.tar.gz *.zip > SHA256SUMS.txt
+
+      - name: Upload checksums artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    needs:
+      - build-packages
+      - checksums
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: package-*
+          merge-multiple: true
+
+      - name: Download checksum artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          name: checksums
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-assets/*.tar.gz
+            release-assets/*.zip
+            release-assets/SHA256SUMS.txt
