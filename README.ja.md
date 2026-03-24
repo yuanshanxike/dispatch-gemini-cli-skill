@@ -6,7 +6,7 @@
 
 ## はじめに
 
-[ACP (Anthropic Context Protocol)](https://github.com/coder/acp-go-sdk) を介して
+[ACP (Agent Client Protocol)](https://github.com/coder/acp-go-sdk) を介して
 Gemini CLI とのマルチターン会話のトンネリングを実装するブリッジです。
 
 このプロジェクトは HTTP サーバーを提供し、OpenClaw エージェントが Gemini CLI

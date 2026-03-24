@@ -7,7 +7,7 @@
 ## Introduction
 
 A bridge that implements multi-turn conversation tunneling with the Gemini CLI
-via the [Anthropic Context Protocol (ACP)](https://github.com/coder/acp-go-sdk).
+via the [Agent Client Protocol (ACP)](https://github.com/coder/acp-go-sdk).
 
 This project provides an HTTP server that allows OpenClaw agents to create, use,
 and manage multi-turn conversation sessions with the Gemini CLI seamlessly.

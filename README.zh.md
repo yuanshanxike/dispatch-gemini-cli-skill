@@ -6,7 +6,7 @@
 
 ## 简介
 
-通过 [ACP (Anthropic Context Protocol)](https://github.com/coder/acp-go-sdk)
+通过 [ACP (Agent Client Protocol)](https://github.com/coder/acp-go-sdk)
 协议实现与 Gemini CLI 的多轮对话桥接。
 
 本项目提供了一个 HTTP Server，使得 OpenClaw Agent 可以无缝创建、使用和管理与
